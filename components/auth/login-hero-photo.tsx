@@ -81,6 +81,7 @@ function Particle({ index }: { index: number }) {
         true,
       ),
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   const rStyle = useAnimatedStyle(() => ({
