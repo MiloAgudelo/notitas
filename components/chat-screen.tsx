@@ -15,6 +15,7 @@ import {
   getTimeOfDayGreeting,
 } from '@/constants/couple';
 import { bubblePaperShadow, Paper, paperRoundedFont } from '@/constants/paper-theme';
+import { ChatMessageText } from '@/components/chat-message-text';
 import { LoginTypewriterLine } from '@/components/auth/login-typewriter-line';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -168,6 +169,7 @@ export function ChatScreen() {
   const draftBeforeEditRef = useRef<string | null>(null);
   const composerInputRef = useRef<TextInput>(null);
   const openSwipeCloseFnRef = useRef<(() => void) | null>(null);
+  const inputTextRef = useRef('');
 
   const handleSwipeOpen = useCallback((close: () => void) => {
     openSwipeCloseFnRef.current?.();
@@ -257,15 +259,22 @@ export function ChatScreen() {
     [currentUserId],
   );
 
+  const handleChangeText = useCallback((text: string) => {
+    inputTextRef.current = text;
+    setInput(text);
+  }, []);
+
   const cancelEdit = useCallback(() => {
-    setInput(draftBeforeEditRef.current ?? '');
+    const draft = draftBeforeEditRef.current ?? '';
+    inputTextRef.current = draft;
+    setInput(draft);
     draftBeforeEditRef.current = null;
     setEditingMessageId(null);
   }, []);
 
   const saveEdit = useCallback(async () => {
     if (!editingMessageId || !currentUserId) return;
-    const text = input.trim();
+    const text = inputTextRef.current.trim();
     if (!text) {
       Alert.alert('Vacío', 'Escribe algo o cancela.');
       return;
@@ -273,6 +282,7 @@ export function ChatScreen() {
     const id = editingMessageId;
     draftBeforeEditRef.current = null;
     setEditingMessageId(null);
+    inputTextRef.current = '';
     setInput('');
 
     let previous: MessageRow[] = [];
@@ -288,20 +298,12 @@ export function ChatScreen() {
       setMessages(previous);
       Alert.alert('Error', 'No se pudo guardar el mensaje.');
     }
-  }, [editingMessageId, input, currentUserId]);
+  }, [editingMessageId, currentUserId]);
 
   const send = useCallback(async () => {
     if (editingMessageId) return;
-    const text = input.trim();
-    if (!text || sending) return;
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      Alert.alert('Sesión', 'No hay usuario autenticado.');
-      return;
-    }
+    const text = inputTextRef.current.trim();
+    if (!text || sending || !currentUserId) return;
 
     const tempId = makeTempId();
     const now = new Date().toISOString();
@@ -309,15 +311,16 @@ export function ChatScreen() {
       id: tempId,
       created_at: now,
       content: text,
-      sender_id: user.id,
+      sender_id: currentUserId,
     };
 
+    inputTextRef.current = '';
     setInput('');
     setSending(true);
     setMessages((prev) => [optimistic, ...prev]);
 
     try {
-      const saved = await insertMessage(supabase, { content: text, sender_id: user.id });
+      const saved = await insertMessage(supabase, { content: text, sender_id: currentUserId });
       setMessages((prev) => {
         const idx = prev.findIndex((m) => m.id === tempId);
         if (idx === -1) return mergeInsert(prev, saved);
@@ -332,7 +335,7 @@ export function ChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [input, sending, editingMessageId]);
+  }, [sending, editingMessageId, currentUserId]);
 
   const keyboardVerticalOffset = Platform.OS === 'ios' ? insets.top : 0;
 
@@ -400,7 +403,11 @@ export function ChatScreen() {
                   bubblePaperShadow,
                   mine ? styles.bubbleMine : styles.bubbleOther,
                 ]}>
-                <Text style={[styles.bubbleText, paperRoundedFont]}>{item.content}</Text>
+                <ChatMessageText
+                  text={item.content}
+                  playTypewriter={false}
+                  onTypewriterDone={() => {}}
+                />
               </View>
             );
             return (
@@ -409,8 +416,9 @@ export function ChatScreen() {
                 {canManage ? (
                   <SwipeableBubble
                     onEdit={() => {
-                      draftBeforeEditRef.current = input;
+                      draftBeforeEditRef.current = inputTextRef.current;
                       setEditingMessageId(item.id);
+                      inputTextRef.current = item.content;
                       setInput(item.content);
                     }}
                     onDelete={() => handleDelete(item)}
@@ -447,8 +455,7 @@ export function ChatScreen() {
             placeholder={editingMessageId ? 'Edita el mensaje…' : inputPlaceholder}
             placeholderTextColor={Paper.textMuted}
             value={input}
-            onChangeText={setInput}
-            editable={!sending}
+            onChangeText={handleChangeText}
             multiline
           />
           <Pressable
@@ -512,11 +519,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-  },
-  bubbleText: {
-    color: Paper.text,
-    fontSize: 16,
-    lineHeight: 22,
   },
   bubbleMine: {
     backgroundColor: Paper.bubbleMine,
