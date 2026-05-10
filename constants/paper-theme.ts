@@ -1,6 +1,10 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
-import { Fonts } from '@/constants/theme';
+const roundedFont = Platform.select({
+  ios: 'ui-rounded',
+  default: 'normal',
+  web: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
+});
 
 /**
  * Soft aesthetic / paper palette — use consistently on login and chat (ignore system dark mode).
@@ -36,5 +40,5 @@ export const bubblePaperShadow: ViewStyle = Platform.select({
 });
 
 export const paperRoundedFont: TextStyle = {
-  fontFamily: Fonts.rounded,
+  fontFamily: roundedFont,
 };
